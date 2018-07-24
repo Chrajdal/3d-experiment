@@ -375,4 +375,6 @@ void Game::ComposeFrame()
 		gfx.DrawLine_s(v1Raster.x, v1Raster.y, v2Raster.x, v2Raster.y, Colors::Red);
 		gfx.DrawLine_s(v2Raster.x, v2Raster.y, v0Raster.x, v0Raster.y, Colors::Green);
 	}	
+
+	//test git
 }
