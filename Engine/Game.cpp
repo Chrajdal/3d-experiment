@@ -12,7 +12,7 @@ public:
 		: dx(Graphics::ScreenWidth / 2), dy(Graphics::ScreenHeight / 2)
 	{}
 
-	Cvec3<double> & Transform(Cvec3<double> & v) const
+	Vec3f & Transform(Vec3f & v) const
 	{
 		//const float zInv = 1.0f / v.z;
 		// divide all position components and attributes by z
@@ -30,6 +30,31 @@ public:
 
 		return v;
 	}
+
+	Vec2i Transform(
+		const Vec3f pWorld,
+		const Matrix44f &worldToCamera,
+		const float &canvasWidth,
+		const float &canvasHeight,
+		const uint32_t &imageWidth,
+		const uint32_t &imageHeight
+	) const
+	{
+		Vec2i pRaster;
+		Vec3f pCamera;
+		worldToCamera.multVecMatrix(pWorld, pCamera);
+		Vec2f pScreen;
+		pScreen.x = pCamera.x / -pCamera.z;
+		pScreen.y = pCamera.y / -pCamera.z;
+		Vec2f pNDC;
+		pNDC.x = (pScreen.x + canvasWidth * 0.5) / canvasWidth;
+		pNDC.y = (pScreen.y + canvasHeight * 0.5) / canvasHeight;
+		pRaster.x = (int)(pNDC.x * imageWidth);
+		pRaster.y = (int)((1 - pNDC.y) * imageHeight);
+		return pRaster;
+	}
+
+
 private:
 	double dx;
 	double dy;
@@ -37,105 +62,106 @@ private:
 
 struct TIndexedLineList
 {
-	vector<Cvec3<double>> points;
+	vector<Vec3f> points;
 	vector<unsigned> indices;
 };
 
 class Camera
 {
 public:
-	Camera(void)
+	Camera(const Vec3f & p, const Vec3f look)
+		: pos(p), looking_at(look)
+	{}
+
+	Vec3f pos;
+	Vec3f looking_at;
+
+	Matrix44f get_view(void) const
 	{
-		pos = Cvec3<double>(0, 0, 0);
-		rot = Cvec3<double>(0, 0, 0);
-		maxrange = 100;
-		minrange = 0;
+		// the position of the camera, called 'eye'
+		Vec3f c = pos;
+		Vec3f u, v, w;
+
+		// compute "negative" look direction by substracting
+		w = c - looking_at;
+		w.normalize();
+
+		// compute cross product
+		u = Vec3f(0, 0, 1).crossProduct(w); // side = (0,0,1) x w
+		u.normalize();
+
+		// up = side x look
+		v = w.crossProduct(u);
+		v.normalize();
+
+		Matrix44f rotation; // identity
+
+		// note the format: set(COLUMN, ROW, value)
+		// it may be different for your matrix implementation
+
+		rotation[0][0] = u.x;
+		rotation[1][0] = u.y;
+		rotation[2][0] = u.z;
+
+		rotation[0][1] = v.x;
+		rotation[1][1] = v.y;
+		rotation[2][1] = v.z;
+
+		rotation[0][2] = w.x;
+		rotation[1][2] = w.y;
+		rotation[2][2] = w.z;
+
+		Matrix44f translation; // identity
+		translation[3][0] = -c.x;
+		translation[3][1] = -c.y;
+		translation[3][2] = -c.z;
+
+		// view matrix
+		Matrix44f view;
+		view = rotation * translation;
+
+		// print matrix on console
+		return view;
 	}
-
-
-	Cvec3<double> pos;
-	Cvec3<double> rot;
-
-	double maxrange;
-	double minrange;
 };
 
-class object
-{
-public:
-
-};
 
 class CCube
 {
 public:
 	CCube(double size)
+		:
+		scale (1,1,1),
+		rotation(0,0,0),
+		translation (0,0,0)
 	{
-		double x = size / 2;
-
-		points.push_back(Cvec3<double>(-x, -x, +x)); //
-		points.push_back(Cvec3<double>(-x, -x, -x));
-		points.push_back(Cvec3<double>(-x, +x, +x));
-		points.push_back(Cvec3<double>(-x, +x, -x));
-
-		points.push_back(Cvec3<double>(+x, -x, +x));
-		points.push_back(Cvec3<double>(+x, -x, -x));
-		points.push_back(Cvec3<double>(+x, +x, +x));
-		points.push_back(Cvec3<double>(+x, +x, -x));
+		float x = size / 2;
+		points =
+		{
+			{ -x, +x, +x },
+			{ +x, +x, +x },
+			{ +x, +x, -x },
+			{ -x, +x, -x },
+			{ -x, -x, +x },
+			{ +x, -x, +x },
+			{ +x, -x, -x },
+			{ -x, -x, -x }
+		};
 	}
 
 	TIndexedLineList GetLines(void) const
 	{
-		/*return { points, { 
-			0,1,
-			0,3,
-			0,4,
-			1,2,
-			1,5,
-			2,3,
-			2,6,
-			3,7,
-			4,5,
-			4,7,
-			5,6,
-			6,7} };
-			*/
-		return{
-			points,{
-			0,1,  1,3,  3,2,  2,0,
-			0,4,  1,5,	3,7,  2,6,
-			4,5,  5,7,	7,6,  6,4 }
-		};
-	}
+		vector<Vec3f> res = points;
+		
 
-	void Scale(const Cvec3<double> & s)
-	{
-		for (auto & i : points)
-		{
-			i.x *= s.x;
-			i.y *= s.y;
-			i.z *= s.z;
-		}
-	}
+		double cosa = std::cos(rotation.z);
+		double sina = std::sin(rotation.z);
 
-	void Translate(const Cvec3<double> & t)
-	{
-		for (auto & i : points)
-		{
-			i = i + t;
-		}
-	}
+		double cosb = std::cos(rotation.x);
+		double sinb = std::sin(rotation.x);
 
-	void Rotate(const Cvec3<double> & r)
-	{
-		double cosa = std::cos(r.z);
-		double sina = std::sin(r.z);
-
-		double cosb = std::cos(r.x);
-		double sinb = std::sin(r.x);
-
-		double cosc = std::cos(r.y);
-		double sinc = std::sin(r.y);
+		double cosc = std::cos(rotation.y);
+		double sinc = std::sin(rotation.y);
 
 		double Axx = cosa * cosb;
 		double Axy = cosa * sinb*sinc - sina * cosc;
@@ -149,46 +175,65 @@ public:
 		double Azy = cosb * sinc;
 		double Azz = cosb * cosc;
 
-		for (int i = 0; i < points.size(); i++) {
-			double px = points[i].x;
-			double py = points[i].y;
-			double pz = points[i].z;
+		for (int i = 0; i < res.size(); i++) {
+			double px = res[i].x;
+			double py = res[i].y;
+			double pz = res[i].z;
 
-			points[i].x = Axx * px + Axy * py + Axz * pz;
-			points[i].y = Ayx * px + Ayy * py + Ayz * pz;
-			points[i].z = Azx * px + Azy * py + Azz * pz;
+			res[i].x = Axx * px + Axy * py + Axz * pz;
+			res[i].y = Ayx * px + Ayy * py + Ayz * pz;
+			res[i].z = Azx * px + Azy * py + Azz * pz;
 		}
-	}
 
-	void draw(Graphics & gfx, const Camera & cam, const Color & c) const
-	{
-		TIndexedLineList list = GetLines();
-		ScreenTransformer t;
-
-		for (auto & i : list.points)
-			t.Transform(i);
-
-		for (auto i = list.indices.cbegin(); i != list.indices.cend(); std::advance(i, 2))
+		for (auto & i : res)
 		{
-			auto a = list.points[*i];
-			auto b = list.points[*std::next(i)];
-			double da = (cam.pos - a).length();
-			double db = (cam.pos - b).length();
-
-			if ((da > cam.maxrange || db > cam.maxrange ||
-				  da < cam.minrange || db < cam.minrange))
-				gfx.DrawLine_s(a.x, a.y, b.x, b.y, c);
+			i.x *= scale.x;
+			i.y *= scale.y;
+			i.z *= scale.z;
 		}
+
+		for (auto & i : res)
+		{
+			i.x += translation.x;
+			i.y += translation.y;
+			i.z += translation.z;
+		}
+
+		
+		
+		
+		return{
+			res,
+			{ 4,5,6, 4,7,6, 3,2,6, 3,7,6, 0,3,7, 0,4,7, 0,1,5, 0,4,5, 1,2,6, 1,5,6, 0,1,2, 0,3,2 }
+		};
 	}
+
+	void Scale(const Vec3f & s)
+	{
+		scale = scale + s;
+	}
+
+	void Translate(const Vec3f & t)
+	{
+		translation.x += t.x;
+		translation.y += t.y;
+		translation.z += t.z;
+	}
+
+	void Rotate(const Vec3f & r)
+	{
+		rotation = rotation + r;
+	}
+
 private:
-	vector<Cvec3<double>> points;
+	Vec3f scale;
+	Vec3f rotation;
+	Vec3f translation;
+	vector<Vec3f> points;
 };
 
-CCube c1(0.25);
-CCube c2(0.25);
+CCube c1(25);
 ScreenTransformer t;
-Camera cam;
-
 
 void computePixelCoordinates(
 	const Vec3f pWorld,
@@ -197,8 +242,7 @@ void computePixelCoordinates(
 	const float &canvasWidth,
 	const float &canvasHeight,
 	const uint32_t &imageWidth,
-	const uint32_t &imageHeight
-)
+	const uint32_t &imageHeight)
 {
 	Vec3f pCamera;
 	worldToCamera.multVecMatrix(pWorld, pCamera);
@@ -213,10 +257,8 @@ void computePixelCoordinates(
 }
 
 double camx = 0, camy = 0, camz = 0;
-
-
 float canvasWidth = 2, canvasHeight = 2;
-uint32_t imageWidth = 1000, imageHeight = 1000;
+uint32_t imageWidth = 1000u, imageHeight = 1000u;
 
 const Vec3f verts[146] = {
 	{ 0,    39.034,         0 },{ 0.76212,    36.843,         0 },
@@ -347,34 +389,128 @@ void Game::Go()
 	gfx.EndFrame();
 }
 
+int counterx = 0;
+int countery = 0;
+bool forward = false;
+bool up = false;
+Camera c(Vec3f(50, 50, 50), Vec3f(150, 1, 1));
+
 void Game::UpdateModel()
 {
-	//camx += 0.01;
-	//camy += 0.01;
-	//camz += 0.01;
+	if (forward == false)
+	{
+		counterx++;
+		if (counterx >= 10)
+			forward = true;
+	}
+	else
+	{
+		counterx--;
+		if (counterx < 10)
+			forward = false;
+	}
+
+	//if (up == false)
+	//{
+	//	countery++;
+	//	if (countery >= 10)
+	//		up = true;
+	//}
+	//else
+	//{
+	//	countery--;
+	//	if (countery < 10)
+	//		up = false;
+	//}
+
+	c1.Translate(Vec3f(counterx * 0.001, 0, countery * 0.001));
+	//c1.Scale(Vec3f(counter * 0.0001, -counter * 0.0001, -counter * 0.0001));
+	c1.Rotate(Vec3f(0.01,0.01,0.01));
+
+
+	/*-----------------------------------------------*/
+	// up down with cam
+	if (wnd.kbd.KeyIsPressed(VK_SPACE))
+	{
+		c.pos = c.pos + Vec3f(0, 1, 0);
+		c.looking_at = c.looking_at + Vec3f(0, 1, 0);
+	}
+	if (wnd.kbd.KeyIsPressed(VK_SHIFT))
+	{
+		c.pos = c.pos - Vec3f(0, 1, 0);
+		c.looking_at = c.looking_at - Vec3f(0, 1, 0);
+	}
+
+	// forward backward with cam
+	if (wnd.kbd.KeyIsPressed(0x41 + ('w' - 'a')))
+	{
+		c.pos = c.pos + Vec3f(0.1, 0, 0);
+	}
+	if (wnd.kbd.KeyIsPressed(0x41 + ('s' - 'a')))
+	{
+		c.pos = c.pos - Vec3f(0.1, 0, 0);
+	}
+	
+
+	// sideways with cam
+	//if (wnd.kbd.KeyIsPressed(0x41 + 'w'))
+	//	c.pos = c.pos + Vec3f(-0.1, 0, 0);
+	//if (wnd.kbd.KeyIsPressed(0x41 + 'w'))
+	//	c.pos = c.pos + Vec3f(-0.1, 0, 0);
+
+	/*-----------------------------------------------*/
 }
 
 void Game::ComposeFrame()
 {
-	Matrix44f cameraToWorld(0.871214, 0, -0.490904, 0, -0.192902, 0.919559, -0.342346, 0, 0.451415, 0.392953, 0.801132, 0, 14.777467, 29.361945, 27.993464, 1);
+	Matrix44f cameraToWorld;
+	
+	cameraToWorld = c.get_view();
+	
+	//cameraToWorld = Matrix44f (
+	//	0.871214, 0, -0.490904, 0,
+	//	-0.192902, 0.919559, -0.342346, 0,
+	//	0.451415, 0.392953, 0.801132, 0,
+	//	24.777467, 29.361945, 27.993464, 1);
 	Matrix44f worldToCamera = cameraToWorld.inverse();
 	Vec2i v0Raster, v1Raster, v2Raster;
 	TIndexedLineList list = c1.GetLines();
-	
-	for (uint32_t i = 0; i < numTris; ++i)
+	ScreenTransformer transformer;
+
+	//for (unsigned i = 0; i < numTris; ++i)
+	//{
+	//	const Vec3f &v0World = verts[tris[i * 3]];
+	//	const Vec3f &v1World = verts[tris[i * 3 + 1]];
+	//	const Vec3f &v2World = verts[tris[i * 3 + 2]];
+	//	Vec2i v0Raster, v1Raster, v2Raster;
+	//	computePixelCoordinates(v0World, v0Raster, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	//	computePixelCoordinates(v1World, v1Raster, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	//	computePixelCoordinates(v2World, v2Raster, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	//
+	//	gfx.DrawLine_s(v0Raster.x, v0Raster.y, v1Raster.x, v1Raster.y, Colors::Gray);
+	//	gfx.DrawLine_s(v1Raster.x, v1Raster.y, v2Raster.x, v2Raster.y, Colors::Gray);
+	//	gfx.DrawLine_s(v2Raster.x, v2Raster.y, v0Raster.x, v0Raster.y, Colors::Gray);
+	//}
+
+	for (unsigned i = 0; i < list.indices.size() - 1; i += 3)
 	{
-		const Vec3f &v0World = verts[tris[i * 3]];
-		const Vec3f &v1World = verts[tris[i * 3 + 1]];
-		const Vec3f &v2World = verts[tris[i * 3 + 2]];
-		Vec2i v0Raster, v1Raster, v2Raster;
-		computePixelCoordinates(v0World, v0Raster, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
-		computePixelCoordinates(v1World, v1Raster, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
-		computePixelCoordinates(v2World, v2Raster, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+		const Vec3f point1 = list.points[list.indices[i]];
+		const Vec3f point2 = list.points[list.indices[i + 1]];
+		const Vec3f point3 = list.points[list.indices[i + 2]];
+		Vec2i res1 = transformer.Transform(point1, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+		Vec2i res2 = transformer.Transform(point2, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+		Vec2i res3 = transformer.Transform(point3, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
 
-		gfx.DrawLine_s(v0Raster.x, v0Raster.y, v1Raster.x, v1Raster.y, Colors::Blue);
-		gfx.DrawLine_s(v1Raster.x, v1Raster.y, v2Raster.x, v2Raster.y, Colors::Red);
-		gfx.DrawLine_s(v2Raster.x, v2Raster.y, v0Raster.x, v0Raster.y, Colors::Green);
-	}	
+		gfx.DrawLine_s(res1.x, res1.y, res2.x, res2.y, Colors::Blue);
+		gfx.DrawLine_s(res2.x, res2.y, res3.x, res3.y, Colors::Blue);
+	}
 
-	//test git
+	//draw axes:
+	Vec2i op = transformer.Transform(Vec3f(0, 0, 0), worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	Vec2i x_axis = transformer.Transform(Vec3f(100, 0, 0), worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	Vec2i y_axis = transformer.Transform(Vec3f(0, 100, 0), worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	Vec2i z_axis = transformer.Transform(Vec3f(0, 0, 100), worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+	gfx.DrawLine_s(op.x, op.y, x_axis.x, x_axis.y, Colors::MakeRGB(125, 0, 0));
+	gfx.DrawLine_s(op.x, op.y, y_axis.x, y_axis.y, Colors::MakeRGB(0, 125, 0));
+	gfx.DrawLine_s(op.x, op.y, z_axis.x, z_axis.y, Colors::MakeRGB(0, 0, 125));
 }
