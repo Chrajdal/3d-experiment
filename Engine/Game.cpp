@@ -225,7 +225,7 @@ public:
 		rotation = rotation + r;
 	}
 
-private:
+//private:
 	Vec3f scale;
 	Vec3f rotation;
 	Vec3f translation;
@@ -256,9 +256,8 @@ void computePixelCoordinates(
 	pRaster.y = (int)((1 - pNDC.y) * imageHeight);
 }
 
-double camx = 0, camy = 0, camz = 0;
-float canvasWidth = 2, canvasHeight = 2;
-uint32_t imageWidth = 1000u, imageHeight = 1000u;
+float canvasWidth = 10, canvasHeight = 10;
+uint32_t imageWidth = Graphics::ScreenWidth, imageHeight = Graphics::ScreenHeight;
 
 const Vec3f verts[146] = {
 	{ 0,    39.034,         0 },{ 0.76212,    36.843,         0 },
@@ -392,7 +391,7 @@ void Game::Go()
 int counterx = 0;
 int countery = 0;
 bool forward = false;
-bool up = false;
+bool up = true;
 Camera c(Vec3f(50, 50, 50), Vec3f(150, 1, 1));
 
 void Game::UpdateModel()
@@ -400,30 +399,31 @@ void Game::UpdateModel()
 	if (forward == false)
 	{
 		counterx++;
-		if (counterx >= 10)
+		if (counterx >= 50)
 			forward = true;
 	}
 	else
 	{
 		counterx--;
-		if (counterx < 10)
+		if (counterx < -50)
 			forward = false;
 	}
 
-	//if (up == false)
-	//{
-	//	countery++;
-	//	if (countery >= 10)
-	//		up = true;
-	//}
-	//else
-	//{
-	//	countery--;
-	//	if (countery < 10)
-	//		up = false;
-	//}
+	if (up == false)
+	{
+		countery++;
+		if (countery >= 50)
+			up = true;
+	}
+	else
+	{
+		countery--;
+		if (countery < -50)
+			up = false;
+	}
 
-	c1.Translate(Vec3f(counterx * 0.001, 0, countery * 0.001));
+	//c1.Translate(Vec3f(counterx * 5, 0, countery * 5));
+	c1.translation =  Vec3f(counterx * 1, 0, countery * 1);
 	//c1.Scale(Vec3f(counter * 0.0001, -counter * 0.0001, -counter * 0.0001));
 	c1.Rotate(Vec3f(0.01,0.01,0.01));
 
@@ -465,13 +465,13 @@ void Game::ComposeFrame()
 {
 	Matrix44f cameraToWorld;
 	
-	cameraToWorld = c.get_view();
+	//cameraToWorld = c.get_view();
 	
-	//cameraToWorld = Matrix44f (
-	//	0.871214, 0, -0.490904, 0,
-	//	-0.192902, 0.919559, -0.342346, 0,
-	//	0.451415, 0.392953, 0.801132, 0,
-	//	24.777467, 29.361945, 27.993464, 1);
+	cameraToWorld = Matrix44f (
+		0.871214, 0, -0.490904, 0,
+		-0.192902, 0.919559, -0.342346, 0,
+		0.451415, 0.392953, 0.801132, 0,
+		24.777467, 29.361945, 27.993464, 1);
 	Matrix44f worldToCamera = cameraToWorld.inverse();
 	Vec2i v0Raster, v1Raster, v2Raster;
 	TIndexedLineList list = c1.GetLines();
