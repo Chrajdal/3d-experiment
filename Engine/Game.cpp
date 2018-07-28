@@ -256,7 +256,7 @@ void computePixelCoordinates(
 	pRaster.y = (int)((1 - pNDC.y) * imageHeight);
 }
 
-float canvasWidth = 10, canvasHeight = 10;
+float canvasWidth = 2, canvasHeight = 2;
 uint32_t imageWidth = Graphics::ScreenWidth, imageHeight = Graphics::ScreenHeight;
 
 const Vec3f verts[146] = {
@@ -366,23 +366,48 @@ const uint32_t tris[numTris * 3] = {
 	112, 143, 116, 116, 143, 144, 116, 145, 119
 };
 
-vector<vector<vector<CCube>>> chunk;
+Matrix44f camToWorld(const Vec3f& from, const Vec3f& to)
+{
+	Vec3f tmp (0, 1, 0);
+	Vec3f forward = (from - to).normalize();
+	Vec3f right = tmp.normalize().crossProduct(forward);
+	Vec3f up = forward.crossProduct(right);
 
+	Matrix44f camToWorld;
+
+	camToWorld[0][0] = right.x;
+	camToWorld[0][1] = right.y;
+	camToWorld[0][2] = right.z;
+	camToWorld[1][0] = up.x;
+	camToWorld[1][1] = up.y;
+	camToWorld[1][2] = up.z;
+	camToWorld[2][0] = forward.x;
+	camToWorld[2][1] = forward.y;
+	camToWorld[2][2] = forward.z;
+
+	camToWorld[3][0] = from.x;
+	camToWorld[3][1] = from.y;
+	camToWorld[3][2] = from.z;
+
+	return camToWorld;
+}
+
+vector<vector<vector<CCube>>> chunk;
 Game::Game( MainWindow& wnd )
 	:
 	wnd( wnd ),
 	gfx( wnd )
 {
-	for (int i = 0; i < 10; ++i)
+	for (int i = 0; i < 100; ++i)
 	{
 		vector<vector<CCube>> tmp1;
-		for (int j = 0; j < 10; ++j)
+		for (int j = 0; j < 3; ++j)
 		{
 			vector<CCube> tmp;
-			for (int k = 0; k < 10; ++k)
+			for (int k = 0; k < 100; ++k)
 			{
 				tmp.push_back(CCube(20));
-				tmp.back().translation = Vec3f(-250 + i * 20, -250 + j * 20, -250 + k * 20);
+				tmp.back().translation = Vec3f(-500 + i * 20,0 + j * 20, -500 + k * 20);
 			}
 			tmp1.push_back(tmp);
 		}
@@ -401,44 +426,100 @@ void Game::Go()
 	gfx.EndFrame();
 }
 
-int counterx = 0;
-int countery = 0;
-bool forward = false;
-bool up = true;
 Camera c(Vec3f(50, 50, 50), Vec3f(150, 1, 1));
 
 void Game::UpdateModel()
 {
+	float speed = 1.0;
+	if (wnd.kbd.KeyIsPressed(VK_CONTROL) || wnd.kbd.KeyIsPressed(VK_LCONTROL))
+		speed = 5.0;
+	
 	/*-----------------------------------------------*/
 	// up down with cam
 	if (wnd.kbd.KeyIsPressed(VK_SPACE))
 	{
-		c.pos = c.pos + Vec3f(0, 1, 0);
-		c.looking_at = c.looking_at + Vec3f(0, 1, 0);
+		Vec3f tmp(0, 1, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = tmp.normalize().crossProduct(forward);
+		Vec3f up = forward.crossProduct(right);
+		c.pos = c.pos + up * speed;
+		c.looking_at = c.looking_at + up * speed;
 	}
 	if (wnd.kbd.KeyIsPressed(VK_SHIFT))
 	{
-		c.pos = c.pos - Vec3f(0, 1, 0);
-		c.looking_at = c.looking_at - Vec3f(0, 1, 0);
+		Vec3f tmp(0, 1, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = tmp.normalize().crossProduct(forward);
+		Vec3f up = forward.crossProduct(right);
+		c.pos = c.pos - up * speed;
+		c.looking_at = c.looking_at - up * speed;
 	}
 
 	// forward backward with cam
 	if (wnd.kbd.KeyIsPressed(0x41 + ('w' - 'a')))
 	{
-		c.pos = c.pos + Vec3f(0.1, 0, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		c.pos = c.pos - forward * speed;
+		c.looking_at = c.looking_at - forward * speed;
 	}
 	if (wnd.kbd.KeyIsPressed(0x41 + ('s' - 'a')))
 	{
-		c.pos = c.pos - Vec3f(0.1, 0, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		c.pos = c.pos + forward * speed;
+		c.looking_at = c.looking_at + forward * speed;
 	}
-	
 
-	// sideways with cam
-	//if (wnd.kbd.KeyIsPressed(0x41 + 'w'))
-	//	c.pos = c.pos + Vec3f(-0.1, 0, 0);
-	//if (wnd.kbd.KeyIsPressed(0x41 + 'w'))
-	//	c.pos = c.pos + Vec3f(-0.1, 0, 0);
+	//sideways with cam
+	if (wnd.kbd.KeyIsPressed(0x41 + ('d' - 'a')))
+	{
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = Vec3f(0, 1, 0).normalize().crossProduct(forward);
+		c.pos = c.pos + right * speed;
+		c.looking_at = c.looking_at + right * speed;
+	}
+	if (wnd.kbd.KeyIsPressed(0x41 + ('a' - 'a')))
+	{
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = Vec3f(0, 1, 0).normalize().crossProduct(forward);
+		c.pos = c.pos - right * speed;
+		c.looking_at = c.looking_at - right * speed;
+	}
 
+	/*-----------------------------------------------*/
+	// rotation with keys - soon to be done with camera
+
+	// rotate horizontally - around y axis
+	if (wnd.kbd.KeyIsPressed(VK_LEFT))
+	{
+		Vec3f tmp(0, 1, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = tmp.normalize().crossProduct(forward);
+		c.looking_at = c.looking_at - right * speed;
+	}
+	if (wnd.kbd.KeyIsPressed(VK_RIGHT))
+	{
+		Vec3f tmp(0, 1, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = tmp.normalize().crossProduct(forward);
+		c.looking_at = c.looking_at + right * speed;
+	}
+	// rotate vertically
+	if (wnd.kbd.KeyIsPressed(VK_UP))
+	{
+		Vec3f tmp(0, 1, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = tmp.normalize().crossProduct(forward);
+		Vec3f up = forward.crossProduct(right);
+		c.looking_at = c.looking_at + up * speed;
+	}
+	if (wnd.kbd.KeyIsPressed(VK_DOWN))
+	{
+		Vec3f tmp(0, 1, 0);
+		Vec3f forward = (c.pos - c.looking_at).normalize();
+		Vec3f right = tmp.normalize().crossProduct(forward);
+		Vec3f up = forward.crossProduct(right);
+		c.looking_at = c.looking_at - up * speed;
+	}
 	/*-----------------------------------------------*/
 }
 
@@ -448,13 +529,13 @@ void Game::ComposeFrame()
 {
 	Matrix44f cameraToWorld;
 	
-	//cameraToWorld = c.get_view();
+	cameraToWorld = camToWorld(c.pos, c.looking_at); //c.get_view();
 	
-	cameraToWorld = Matrix44f (
-		0.871214, 0, -0.490904, 0,
-		-0.192902, 0.919559, -0.342346, 0,
-		0.451415, 0.392953, 0.801132, 0,
-		24.777467, 39.361945, 27.993464, 1);
+	//cameraToWorld = Matrix44f (
+	//	0.871214, 0, -0.490904, 0,
+	//	-0.192902, 0.919559, -0.342346, 0,
+	//	0.451415, 0.392953, 0.801132, 0,
+	//	24.777467, 39.361945, 27.993464, 1);
 	Matrix44f worldToCamera = cameraToWorld.inverse();
 
 	ScreenTransformer transformer;
@@ -491,9 +572,9 @@ void Game::ComposeFrame()
 					Vec2i res3 = transformer.Transform(point3, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
 
 					if (is_in_window(res1) && is_in_window(res2))
-						gfx.DrawLine_s(res1.x, res1.y, res2.x, res2.y, Colors::Blue);
+						gfx.DrawLine_s(res1.x, res1.y, res2.x, res2.y, Colors::Gray);
 					if (is_in_window(res2) && is_in_window(res3))
-						gfx.DrawLine_s(res2.x, res2.y, res3.x, res3.y, Colors::Blue);
+						gfx.DrawLine_s(res2.x, res2.y, res3.x, res3.y, Colors::Gray);
 				}
 			}
 		}
