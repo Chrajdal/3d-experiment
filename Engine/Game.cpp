@@ -5,6 +5,11 @@
 
 using std::vector;
 
+bool is_in_window(const Vec2i & v)
+{
+	return !(v.x < 0 || v.x >= Graphics::ScreenWidth || v.y < 0 || v.y >= Graphics::ScreenHeight);
+}
+
 class ScreenTransformer
 {
 public:
@@ -125,7 +130,6 @@ public:
 	}
 };
 
-
 class CCube
 {
 public:
@@ -199,9 +203,6 @@ public:
 			i.z += translation.z;
 		}
 
-		
-		
-		
 		return{
 			res,
 			{ 4,5,6, 4,7,6, 3,2,6, 3,7,6, 0,3,7, 0,4,7, 0,1,5, 0,4,5, 1,2,6, 1,5,6, 0,1,2, 0,3,2 }
@@ -232,7 +233,6 @@ public:
 	vector<Vec3f> points;
 };
 
-CCube c1(25);
 ScreenTransformer t;
 
 void computePixelCoordinates(
@@ -366,15 +366,28 @@ const uint32_t tris[numTris * 3] = {
 	112, 143, 116, 116, 143, 144, 116, 145, 119
 };
 
+vector<vector<vector<CCube>>> chunk;
+
 Game::Game( MainWindow& wnd )
 	:
 	wnd( wnd ),
 	gfx( wnd )
 {
-
-
-
-	
+	for (int i = 0; i < 10; ++i)
+	{
+		vector<vector<CCube>> tmp1;
+		for (int j = 0; j < 10; ++j)
+		{
+			vector<CCube> tmp;
+			for (int k = 0; k < 10; ++k)
+			{
+				tmp.push_back(CCube(20));
+				tmp.back().translation = Vec3f(-250 + i * 20, -250 + j * 20, -250 + k * 20);
+			}
+			tmp1.push_back(tmp);
+		}
+		chunk.push_back(tmp1);
+	}
 }
 
 void Game::Go()
@@ -396,38 +409,6 @@ Camera c(Vec3f(50, 50, 50), Vec3f(150, 1, 1));
 
 void Game::UpdateModel()
 {
-	if (forward == false)
-	{
-		counterx++;
-		if (counterx >= 50)
-			forward = true;
-	}
-	else
-	{
-		counterx--;
-		if (counterx < -50)
-			forward = false;
-	}
-
-	if (up == false)
-	{
-		countery++;
-		if (countery >= 50)
-			up = true;
-	}
-	else
-	{
-		countery--;
-		if (countery < -50)
-			up = false;
-	}
-
-	//c1.Translate(Vec3f(counterx * 5, 0, countery * 5));
-	c1.translation =  Vec3f(counterx * 1, 0, countery * 1);
-	//c1.Scale(Vec3f(counter * 0.0001, -counter * 0.0001, -counter * 0.0001));
-	c1.Rotate(Vec3f(0.01,0.01,0.01));
-
-
 	/*-----------------------------------------------*/
 	// up down with cam
 	if (wnd.kbd.KeyIsPressed(VK_SPACE))
@@ -461,6 +442,8 @@ void Game::UpdateModel()
 	/*-----------------------------------------------*/
 }
 
+
+
 void Game::ComposeFrame()
 {
 	Matrix44f cameraToWorld;
@@ -471,10 +454,9 @@ void Game::ComposeFrame()
 		0.871214, 0, -0.490904, 0,
 		-0.192902, 0.919559, -0.342346, 0,
 		0.451415, 0.392953, 0.801132, 0,
-		24.777467, 29.361945, 27.993464, 1);
+		24.777467, 39.361945, 27.993464, 1);
 	Matrix44f worldToCamera = cameraToWorld.inverse();
-	Vec2i v0Raster, v1Raster, v2Raster;
-	TIndexedLineList list = c1.GetLines();
+
 	ScreenTransformer transformer;
 
 	//for (unsigned i = 0; i < numTris; ++i)
@@ -492,19 +474,30 @@ void Game::ComposeFrame()
 	//	gfx.DrawLine_s(v2Raster.x, v2Raster.y, v0Raster.x, v0Raster.y, Colors::Gray);
 	//}
 
-	for (unsigned i = 0; i < list.indices.size() - 1; i += 3)
+	for (const auto & it1 : chunk)
 	{
-		const Vec3f point1 = list.points[list.indices[i]];
-		const Vec3f point2 = list.points[list.indices[i + 1]];
-		const Vec3f point3 = list.points[list.indices[i + 2]];
-		Vec2i res1 = transformer.Transform(point1, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
-		Vec2i res2 = transformer.Transform(point2, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
-		Vec2i res3 = transformer.Transform(point3, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+		for (const auto & it2 : it1)
+		{
+			for (const auto & it3 : it2)
+			{
+				TIndexedLineList list = it3.GetLines();
+				for (unsigned i = 0; i < list.indices.size() - 1; i += 3)
+				{
+					const Vec3f point1 = list.points[list.indices[i]];
+					const Vec3f point2 = list.points[list.indices[i + 1]];
+					const Vec3f point3 = list.points[list.indices[i + 2]];
+					Vec2i res1 = transformer.Transform(point1, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+					Vec2i res2 = transformer.Transform(point2, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
+					Vec2i res3 = transformer.Transform(point3, worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
 
-		gfx.DrawLine_s(res1.x, res1.y, res2.x, res2.y, Colors::Blue);
-		gfx.DrawLine_s(res2.x, res2.y, res3.x, res3.y, Colors::Blue);
+					if (is_in_window(res1) && is_in_window(res2))
+						gfx.DrawLine_s(res1.x, res1.y, res2.x, res2.y, Colors::Blue);
+					if (is_in_window(res2) && is_in_window(res3))
+						gfx.DrawLine_s(res2.x, res2.y, res3.x, res3.y, Colors::Blue);
+				}
+			}
+		}
 	}
-
 	//draw axes:
 	Vec2i op = transformer.Transform(Vec3f(0, 0, 0), worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
 	Vec2i x_axis = transformer.Transform(Vec3f(100, 0, 0), worldToCamera, canvasWidth, canvasHeight, imageWidth, imageHeight);
